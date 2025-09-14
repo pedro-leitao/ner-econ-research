@@ -1,0 +1,21 @@
+name: econ-ie
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - accelerate
+  - conllu
+  - huggingface_hub
+  - transformers
+  - pytorch
+  - tiktoken
+  - protobuf
+  - seqeval
+  - sentencepiece
+  - tokenizers
+  - tiktoken
+  - spacy
+  - pymupdf
+  - pip
+  - pip:
