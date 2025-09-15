@@ -99,10 +99,12 @@ LLMs can also suffer from halluciations, where they generate entities that are n
 
 The combination of fine-tuned encoder models for NER and the knowledge graph construction pipeline has shown promising results in extracting causal relationships from economic texts. The resulting knowledge graphs can be used for various applications, such as policy analysis, economic research, and decision-making support.
 
-For example, we can quickly explore the knowledge graph to find all interventions, linked outcomes, excerpts and documents affecting a given population (e.g., "lenders"):
+For this example, we took a small set of [European Central Bank](https://www.ecb.europa.eu) publications, extracted the text, ran NER for outcomes, impacts, coreferences and populations using a fine-tuned EconBERTa model, and constructed a knowledge graph using the provided tooling. The resulting knowledge graph was imported into a Neo4j database for exploration.
+
+With the resulting knowledge graph, we can quickly explore the knowledge graph to find all interventions, linked outcomes, excerpts and documents affecting a given population (e.g., "lenders"):
 
 !["lenders" population](samples/ecb-results-1.jpg)
 
-Or, we can explore interventions and outcomes related to the same population:
+Or, we can explore interventions and outcomes related to the same population, to find relevant excerpt and documents which form the network of interrelated concepts:
 
 !["lenders" interventions and outcomes](samples/ecb-results-2.jpg)
