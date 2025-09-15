@@ -16,6 +16,6 @@ dependencies:
   - tokenizers
   - tiktoken
   - spacy
-  - pymupdf
   - pip
   - pip:
+    - pymupdf
