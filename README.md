@@ -36,7 +36,8 @@ The processing pipeline consists of several steps, each handled by a specific co
 ```mermaid
 graph LR;
     A[PDF files] -->|pdf_parser.py| B[Extracted Text CSV];
-    B -->|trainer.py| C[Fine-tuned NER Model];
+    G[ICON-IE dataset] -->|trainer.py| C;
+    C[Fine-tuned NER Model];
     B -->|inference-ner.py| D[Entities CSV];
     C -->|inference-ner.py| D;
     D -->|relate.py| E[Triplets CSV];
