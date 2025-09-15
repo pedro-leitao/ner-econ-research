@@ -114,6 +114,6 @@ This type of traversal would be directly translatable into Cypher and can power 
 
 ## Possible Impact on Economic Research and Policy Making
 
-For research teams, the graph accelerates evidence mapping and hypothesis generation. Graph analytics (e.g., centrality, community detection) reveal clusters and causal pathways worth testing, while explicit paths and excerpts strengthen systematic reviews and meta-analyses. The same structures can ground LLM drafting—retrieval pulls only sourced passages—so narrative synthesis remains faithful to the literature.
+For research teams, the graph accelerates evidence mapping and hypothesis generation. Graph analytics (e.g., centrality, community detection) reveal clusters and causal pathways worth testing, while explicit paths and excerpts strengthen systematic reviews and meta-analyses. The same structures can ground LLM drafting, retrieval pulls only sourced passages, so narrative synthesis remains faithful to the literature.
 
 For policy makers, the system yields executive-ready briefings that rank interventions by strength and direction of effect for specific populations, with transparent sources. It supports option appraisal and monitoring and evaluation by exposing first and second-order effects and highlighting contradictions or context dependencies. Because nodes are typed by population, distributional questions - who benefits or bears costs - can be answered quickly and defensibly.
