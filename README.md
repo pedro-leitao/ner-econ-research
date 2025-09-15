@@ -102,10 +102,18 @@ The combination of fine-tuned encoder models for NER and the knowledge graph con
 
 For this example, we took a small set of [European Central Bank](https://www.ecb.europa.eu) publications, extracted the text, ran NER for outcomes, impacts, coreferences and populations using a fine-tuned EconBERTa model, and constructed a knowledge graph using the provided tooling. The resulting knowledge graph was imported into a Neo4j database for exploration.
 
-With the resulting knowledge graph, we can quickly explore the knowledge graph to find all interventions, linked outcomes, excerpts and documents affecting a given population (e.g., "lenders"):
+With the resulting knowledge graph, we can quickly explore interventions, linked outcomes, excerpts and documents affecting a given population (e.g., "lenders"):
 
 !["lenders" population](samples/ecb-results-1.jpg)
 
 Or, we can explore interventions and outcomes related to the same population, to find relevant excerpt and documents which form the network of interrelated concepts:
 
 !["lenders" interventions and outcomes](samples/ecb-results-2.jpg)
+
+This type of traversal would be directly translatable into Cypher and can oiwer both KG-QA and retrieval-augmented workflows.
+
+## Possible Impact on Economic Research and Policy Making
+
+For research teams, the graph accelerates evidence mapping and hypothesis generation. Graph analytics (e.g., centrality, community detection) reveal clusters and causal pathways worth testing, while explicit paths and excerpts strengthen systematic reviews and meta-analyses. The same structures can ground LLM drafting—retrieval pulls only sourced passages—so narrative synthesis remains faithful to the literature.
+
+For policy makers, the system yields executive-ready briefings that rank interventions by strength and direction of effect for specific populations, with transparent sources. It supports option appraisal and monitoring and evaluation by exposing first and second-order effects and highlighting contradictions or context dependencies. Because nodes are typed by population, distributional questions—who benefits or bears costs—can be answered quickly and defensibly.
