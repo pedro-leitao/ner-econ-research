@@ -2,13 +2,28 @@
 // Place all_pdfs_related.csv into Neo4j's import/ directory.
 
 /// ---- Constraints ----
-CREATE CONSTRAINT IF NOT EXISTS FOR (c:Concept)  REQUIRE c.unique_key IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document) REQUIRE d.doc_key    IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (e:Excerpt)  REQUIRE e.excerpt_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (i:Intervention) REQUIRE i.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (o:Outcome)      REQUIRE o.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (p:Population)   REQUIRE p.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (c:Coreference)  REQUIRE c.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document)     REQUIRE d.doc_key    IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (e:Excerpt)      REQUIRE e.excerpt_key IS UNIQUE;
 
 /// ---- Full-text indexes (Neo4j 5 syntax) ----
-CREATE FULLTEXT INDEX concept_text_fts IF NOT EXISTS
-FOR (c:Concept) ON EACH [c.text]
+CREATE FULLTEXT INDEX intervention_text_fts IF NOT EXISTS
+FOR (i:Intervention) ON EACH [i.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX outcome_text_fts IF NOT EXISTS
+FOR (o:Outcome) ON EACH [o.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX population_text_fts IF NOT EXISTS
+FOR (p:Population) ON EACH [p.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX coreference_text_fts IF NOT EXISTS
+FOR (c:Coreference) ON EACH [c.text]
 OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
 
 CREATE FULLTEXT INDEX excerpt_text_fts IF NOT EXISTS
@@ -64,19 +79,46 @@ MERGE (x:Excerpt {excerpt_key: excerpt_key})
 
 MERGE (d)-[:HAS_EXCERPT]->(x)
 
-// Subject Concept
-MERGE (s:Concept {unique_key: s_key})
-  ON CREATE SET s.text = s_text, s.type = s_type
-FOREACH (_ IN CASE WHEN s_type = 'intervention' THEN [1] ELSE [] END | SET s:Intervention)
-FOREACH (_ IN CASE WHEN s_type = 'outcome'      THEN [1] ELSE [] END | SET s:Outcome)
-FOREACH (_ IN CASE WHEN s_type = 'population'   THEN [1] ELSE [] END | SET s:Population)
+// Subject Node (direct type creation)
+FOREACH (_ IN CASE WHEN s_type = 'intervention' THEN [1] ELSE [] END |
+  MERGE (s:Intervention {unique_key: s_key})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'outcome' THEN [1] ELSE [] END |
+  MERGE (s:Outcome {unique_key: s_key})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'population' THEN [1] ELSE [] END |
+  MERGE (s:Population {unique_key: s_key})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'coreference' THEN [1] ELSE [] END |
+  MERGE (s:Coreference {unique_key: s_key})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
 
-// Object Concept
-MERGE (o:Concept {unique_key: o_key})
-  ON CREATE SET o.text = o_text, o.type = o_type
-FOREACH (_ IN CASE WHEN o_type = 'intervention' THEN [1] ELSE [] END | SET o:Intervention)
-FOREACH (_ IN CASE WHEN o_type = 'outcome'      THEN [1] ELSE [] END | SET o:Outcome)
-FOREACH (_ IN CASE WHEN o_type = 'population'   THEN [1] ELSE [] END | SET o:Population)
+// Object Node (direct type creation)
+FOREACH (_ IN CASE WHEN o_type = 'intervention' THEN [1] ELSE [] END |
+  MERGE (o:Intervention {unique_key: o_key})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'outcome' THEN [1] ELSE [] END |
+  MERGE (o:Outcome {unique_key: o_key})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'population' THEN [1] ELSE [] END |
+  MERGE (o:Population {unique_key: o_key})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'coreference' THEN [1] ELSE [] END |
+  MERGE (o:Coreference {unique_key: o_key})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+
+// Get references to subject and object nodes for relationships
+WITH row, s_type, o_type, rel_lc, s_key, o_key, file, title, textBlock, effect_size, avg_confidence, d, x
+OPTIONAL MATCH (s) WHERE s.unique_key = s_key
+OPTIONAL MATCH (o) WHERE o.unique_key = o_key
 
 // Provenance mentions
 MERGE (s)-[:MENTIONED_IN]->(x)

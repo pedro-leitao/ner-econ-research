@@ -4,14 +4,12 @@ import argparse
 class CypherFromTripletsWithFTS:
     """
     Generate a Cypher script from a triplets CSV that:
-      - Creates uniqueness constraints per concrete label
+      - Creates uniqueness constraints
       - Creates full-text indexes (Intervention, Outcome, Population, Coreference, Excerpt, Document) for Neo4j 5
       - Loads CSV and builds the graph (no APOC required)
 
     Expected CSV columns:
       file,title,subject_text,subject_type,relation,object_text,object_type,effect_size,avg_confidence,textBlock
-
-    Allowed *_type values (case-insensitive): intervention, outcome, population, coreference
     """
 
     def __init__(self, input_csv: str, output_cypher: str):
@@ -19,34 +17,33 @@ class CypherFromTripletsWithFTS:
         self.output_cypher = output_cypher
 
     def _script(self, csv_basename: str) -> str:
-        # Note: Double braces {{ }} emit single { } inside f-strings.
-        return f"""// Auto-generated Cypher import script (concrete labels, Neo4j 5)
+        # Note: Double braces {{ }} are used to emit single { } into the Cypher output from an f-string.
+        return f"""// Auto-generated Cypher import script with Full-Text Indexes (Neo4j 5)
 // Place {csv_basename} into Neo4j's import/ directory.
 
-/// ---- Constraints (per concrete label) ----
-CREATE CONSTRAINT IF NOT EXISTS FOR (n:Intervention) REQUIRE n.unique_key IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (n:Outcome)      REQUIRE n.unique_key IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (n:Population)   REQUIRE n.unique_key IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (n:Coreference)  REQUIRE n.unique_key IS UNIQUE;
-
-CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document) REQUIRE d.doc_key    IS UNIQUE;
-CREATE CONSTRAINT IF NOT EXISTS FOR (e:Excerpt)  REQUIRE e.excerpt_key IS UNIQUE;
+/// ---- Constraints ----
+CREATE CONSTRAINT IF NOT EXISTS FOR (i:Intervention) REQUIRE i.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (o:Outcome)      REQUIRE o.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (p:Population)   REQUIRE p.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (c:Coreference)  REQUIRE c.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document)     REQUIRE d.doc_key    IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (e:Excerpt)      REQUIRE e.excerpt_key IS UNIQUE;
 
 /// ---- Full-text indexes (Neo4j 5 syntax) ----
 CREATE FULLTEXT INDEX intervention_text_fts IF NOT EXISTS
-FOR (n:Intervention) ON EACH [n.text]
+FOR (i:Intervention) ON EACH [i.text]
 OPTIONS {{ indexConfig: {{ `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true }} }};
 
 CREATE FULLTEXT INDEX outcome_text_fts IF NOT EXISTS
-FOR (n:Outcome) ON EACH [n.text]
+FOR (o:Outcome) ON EACH [o.text]
 OPTIONS {{ indexConfig: {{ `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true }} }};
 
 CREATE FULLTEXT INDEX population_text_fts IF NOT EXISTS
-FOR (n:Population) ON EACH [n.text]
+FOR (p:Population) ON EACH [p.text]
 OPTIONS {{ indexConfig: {{ `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true }} }};
 
-CREATE FULLTEXT INDEX coref_text_fts IF NOT EXISTS
-FOR (n:Coreference) ON EACH [n.text]
+CREATE FULLTEXT INDEX coreference_text_fts IF NOT EXISTS
+FOR (c:Coreference) ON EACH [c.text]
 OPTIONS {{ indexConfig: {{ `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true }} }};
 
 CREATE FULLTEXT INDEX excerpt_text_fts IF NOT EXISTS
@@ -87,7 +84,7 @@ WITH
 
 // Document & Excerpt (provenance)
 MERGE (d:Document {{doc_key: doc_key}})
-  ON CREATE SET d.file = file, d.title = title;
+  ON CREATE SET d.file = file, d.title = title
 
 MERGE (x:Excerpt {{excerpt_key: excerpt_key}})
   ON CREATE SET
@@ -97,87 +94,67 @@ MERGE (x:Excerpt {{excerpt_key: excerpt_key}})
                 WHEN size(textBlock) > 120 THEN substring(textBlock, 0, 120) + '…'
                 ELSE textBlock
               END,
-    x.text  = textBlock;
+    x.text  = textBlock
 
-MERGE (d)-[:HAS_EXCERPT]->(x);
 
-// --- Subject node as concrete label (no APOC) ---
-CALL {{
-  WITH s_type, s_key, s_text
-  CALL {{
-    WITH s_type, s_key, s_text
-    WHERE s_type = 'intervention'
-    MERGE (n:Intervention {{unique_key: s_key}})
-      ON CREATE SET n.text = s_text
-    RETURN n
-    UNION
-    WITH s_type, s_key, s_text
-    WHERE s_type = 'outcome'
-    MERGE (n:Outcome {{unique_key: s_key}})
-      ON CREATE SET n.text = s_text
-    RETURN n
-    UNION
-    WITH s_type, s_key, s_text
-    WHERE s_type = 'population'
-    MERGE (n:Population {{unique_key: s_key}})
-      ON CREATE SET n.text = s_text
-    RETURN n
-    UNION
-    WITH s_type, s_key, s_text
-    WHERE s_type = 'coreference'
-    MERGE (n:Coreference {{unique_key: s_key}})
-      ON CREATE SET n.text = s_text
-    RETURN n
-  }}
-  RETURN n AS s
-}}
+MERGE (d)-[:HAS_EXCERPT]->(x)
 
-// --- Object node as concrete label (no APOC) ---
-CALL {{
-  WITH o_type, o_key, o_text
-  CALL {{
-    WITH o_type, o_key, o_text
-    WHERE o_type = 'intervention'
-    MERGE (n:Intervention {{unique_key: o_key}})
-      ON CREATE SET n.text = o_text
-    RETURN n
-    UNION
-    WITH o_type, o_key, o_text
-    WHERE o_type = 'outcome'
-    MERGE (n:Outcome {{unique_key: o_key}})
-      ON CREATE SET n.text = o_text
-    RETURN n
-    UNION
-    WITH o_type, o_key, o_text
-    WHERE o_type = 'population'
-    MERGE (n:Population {{unique_key: o_key}})
-      ON CREATE SET n.text = o_text
-    RETURN n
-    UNION
-    WITH o_type, o_key, o_text
-    WHERE o_type = 'coreference'
-    MERGE (n:Coreference {{unique_key: o_key}})
-      ON CREATE SET n.text = o_text
-    RETURN n
-  }}
-  RETURN n AS o
-}}
+// Subject Node (direct type creation)
+FOREACH (_ IN CASE WHEN s_type = 'intervention' THEN [1] ELSE [] END |
+  MERGE (s:Intervention {{unique_key: s_key}})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'outcome' THEN [1] ELSE [] END |
+  MERGE (s:Outcome {{unique_key: s_key}})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'population' THEN [1] ELSE [] END |
+  MERGE (s:Population {{unique_key: s_key}})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+FOREACH (_ IN CASE WHEN s_type = 'coreference' THEN [1] ELSE [] END |
+  MERGE (s:Coreference {{unique_key: s_key}})
+    ON CREATE SET s.text = s_text, s.type = s_type
+)
+
+// Object Node (direct type creation)
+FOREACH (_ IN CASE WHEN o_type = 'intervention' THEN [1] ELSE [] END |
+  MERGE (o:Intervention {{unique_key: o_key}})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'outcome' THEN [1] ELSE [] END |
+  MERGE (o:Outcome {{unique_key: o_key}})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'population' THEN [1] ELSE [] END |
+  MERGE (o:Population {{unique_key: o_key}})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+FOREACH (_ IN CASE WHEN o_type = 'coreference' THEN [1] ELSE [] END |
+  MERGE (o:Coreference {{unique_key: o_key}})
+    ON CREATE SET o.text = o_text, o.type = o_type
+)
+
+// Get references to subject and object nodes for relationships
+WITH row, s_type, o_type, rel_lc, s_key, o_key, file, title, textBlock, effect_size, avg_confidence, d, x
+OPTIONAL MATCH (s) WHERE s.unique_key = s_key
+OPTIONAL MATCH (o) WHERE o.unique_key = o_key
 
 // Provenance mentions
-MERGE (s)-[:MENTIONED_IN]->(x);
-MERGE (o)-[:MENTIONED_IN]->(x);
+MERGE (s)-[:MENTIONED_IN]->(x)
+MERGE (o)-[:MENTIONED_IN]->(x)
 
-// Relationships without APOC (choose rel type by value)
+// Relationships without APOC (FOREACH/CASE to choose rel type)
 FOREACH (_ IN CASE WHEN rel_lc = 'impacts' THEN [1] ELSE [] END |
   MERGE (s)-[r:IMPACTS]->(o)
     ON CREATE SET r.effect_size = CASE WHEN effect_size = '' THEN NULL ELSE effect_size END
   SET r.avg_confidence = avg_confidence, r.file = file, r.title = title
-);
+)
 FOREACH (_ IN CASE WHEN rel_lc = 'applies_to' THEN [1] ELSE [] END |
   MERGE (s)-[r:APPLIES_TO]->(o)
     ON CREATE SET r.effect_size = CASE WHEN effect_size = '' THEN NULL ELSE effect_size END
   SET r.avg_confidence = avg_confidence, r.file = file, r.title = title
-);
+)
 FOREACH (_ IN CASE WHEN rel_lc = 'experienced_by' THEN [1] ELSE [] END |
   MERGE (s)-[r:EXPERIENCED_BY]->(o)
     ON CREATE SET r.effect_size = CASE WHEN effect_size = '' THEN NULL ELSE effect_size END
@@ -192,7 +169,7 @@ FOREACH (_ IN CASE WHEN rel_lc = 'experienced_by' THEN [1] ELSE [] END |
 
 def main():
     parser = argparse.ArgumentParser(description="""
-        Generate a Cypher import script (Neo4j 5) from a triplets CSV using concrete labels (Intervention/Outcome/Population/Coreference).
+        Generate a Cypher import script (with Neo4j 5 full-text indexes) from a triplets CSV.
         Usage:
           python cypher_from_triplets_fts.py --input_csv triplets.csv --output_cypher import_triplets.cypher
     """.strip())

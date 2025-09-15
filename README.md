@@ -38,6 +38,12 @@ graph LR;
 
 The `pdf_parser.py` script extracts text blocks from PDF files in a specified directory. It uses heuristics to distinguish between content and headings, aiming to extract meaningful paragraphs while discarding titles and section numbers. The extracted text, along with metadata like file name and title, is saved to a CSV file for further processing.
 
+Note that `pdf_parser.py` uses `spacy` for sentence segmentation, and you will need to download the English language model with the following command before running extraction:
+
+```bash
+spacy download en_core_web_sm
+```
+
 ### Fine-tuning encoder models for NER
 
 `trainer.py` is used to fine-tune a Hugging Face transformer model for Named Entity Recognition (NER) on a custom dataset. It takes a CoNLL-formatted text file as input, where tokens and their corresponding NER tags are defined. The script handles data loading, tokenization, alignment of labels, and the training process itself. After training, it saves the fine-tuned model and provides an evaluation on a test set.
@@ -58,7 +64,7 @@ python trainer.py \
 
 The trainer uses the `transformers` library from Hugging Face, and you can customize various parameters such as batch size, learning rate, and number of epochs through command-line arguments. It is capable of training on GPUs if available, and can leverage any CoNNL-formatted dataset for training encoder models for NER.
 
-Note that for larger datasets, you will want to run fine-tuning on a GPU enabled backend (e.g., Google Colab, AWS SageMaker, Azure ML, etc), as training can be computationally intensive. Fine tuning EconBERTa on the ECON-IE dataset can be done on a standard GPU instance in a few minutes, but larger models and datasets will require more substantial compute resources.
+Note that for larger datasets, you will want to run fine-tuning on a GPU enabled backend (e.g., Google Colab, AWS SageMaker, Azure ML, etc), as training can be computationally intensive. Fine tuning EconBERTa on the ECON-IE dataset can be done on a GPU instance in a few minutes, but larger models and datasets will require more substantial compute resources (fine-tuning `worldbank/econberta-fs` with the ECON-IE dataset on a Macbook with MPS takes hours).
 
 ### Extracting entities
 
@@ -79,3 +85,15 @@ In general, classical encoder models, such as BERT-based models, are highly effe
 LLMs, on the other hand, have shown remarkable capabilities in various NLP tasks, including NER. They can leverage their vast pre-trained knowledge to recognize entities even in contexts they haven't seen during training. However, LLMs can be computationally expensive to run and may require significant resources for fine-tuning, and can sometimes struggle with domain-specific entities if not properly adapted.
 
 LLMs can also suffer from halluciations, where they generate entities that are not present in the text or are incorrect. This can be particularly problematic in policy, research, and economic contexts where accuracy and reliability are crucial. In contrast, classical encoder models, when fine-tuned on relevant datasets, tend to be more reliable in extracting accurate entities and therefore can be preferable when precision is more important than recall. Public cloud LLMs also raise concerns about data privacy and security, as sensitive information may be exposed during the processing of text data, while classical models can be deployed in a more controlled environment.
+
+## Results
+
+The combination of fine-tuned encoder models for NER and the knowledge graph construction pipeline has shown promising results in extracting causal relationships from economic texts. The resulting knowledge graphs can be used for various applications, such as policy analysis, economic research, and decision-making support.
+
+For example, we can quickly explore the knowledge graph to find all interventions, linked outcomes, excerpts and documents affecting a given population (e.g., "lenders"):
+
+!["lenders" population](samples/ecb-results-1.jpg)
+
+Or, we can explore interventions and outcomes related to the same population:
+
+!["lenders" interventions and outcomes](samples/ecb-results-2.jpg)
