@@ -4,6 +4,15 @@ Economic Research is a field that relies heavily on the analysis of large volume
 
 This repository provides a collection of tools for performing NER on economic text data, with a focus on identifying *causal knowledge extraction* and *evidence based policy making*.
 
+The goal is to offer a research, policy analyst, or government official a tool to quickly find relevant publications, excerpts, and evidence related to a specific economic intervention or policy question. The extracted entities can be used to build a set of relevant documents and excerpts which will assist in very quickly finding relevant evidence for further analysis.
+
+The tool will allow answering questions such as:
+
+- What interventions have been shown to impact a specific outcome (e.g., inflation, employment, poverty)?
+- What populations are affected by a specific intervention (e.g., small businesses, low-income households)?
+- What are the reported effects of a specific intervention on a given outcome (e.g., interest rate changes, tax policy changes)?
+- What are the sources of evidence for a specific intervention and its effects (e.g., research papers, policy reports)?
+
 ## Models
 
 Most encoder models for NER are based on transformer architectures, such as BERT, RoBERTa, and GPT. These models have been pre-trained on large corpora of text data and can be fine-tuned on specific NER tasks using labeled datasets. Some popular pre-trained models for NER include:
