@@ -110,7 +110,7 @@ Or, we can explore interventions and outcomes related to the same population, to
 
 !["lenders" interventions and outcomes](samples/ecb-results-2.jpg)
 
-This type of traversal would be directly translatable into Cypher and can oiwer both KG-QA and retrieval-augmented workflows.
+This type of traversal would be directly translatable into Cypher and can power both KG-QA and retrieval-augmented workflows.
 
 ## Possible Impact on Economic Research and Policy Making
 
