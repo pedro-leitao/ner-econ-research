@@ -7,8 +7,8 @@ from typing import List, Dict, Any, Iterable, Tuple, Optional
 
 class CSVTripletExtractor:
     """
-    Reads a CSV with columns:
-      file,title,author,modDate,creationDate,subject,textBlock,entities
+        Reads a CSV with columns:
+            file,page,title,author,modDate,creationDate,subject,textBlock,entities
 
     The 'entities' column contains a JSON array of dicts:
       [{"entity_group": "...", "word": "...", "score": 0.99, "start": 10, "end": 20}, ...]
@@ -195,10 +195,10 @@ class CSVTripletExtractor:
         Read input CSV rows, generate triplets, deduplicate, and write output CSV.
         """
         input_fields_hint = {
-            'file', 'title', 'author', 'modDate', 'creationDate', 'subject', 'textBlock', 'entities'
+            'file', 'page', 'title', 'author', 'modDate', 'creationDate', 'subject', 'textBlock', 'entities'
         }
         out_fields = [
-            "file", "title",
+            "file", "page", "title",
             "subject_text", "subject_type",
             "relation",
             "object_text", "object_type",
@@ -219,12 +219,14 @@ class CSVTripletExtractor:
             for row in reader:
                 base = {
                     "file": row.get("file", ""),
+                    "page": row.get("page", ""),
                     "title": row.get("title", ""),
                     "textBlock": self._normalize_text(row.get("textBlock", "")),
                 }
                 for t in self._triplets_from_row(row):
                     key = (
                         base["file"],
+                        base["page"],
                         base["title"],
                         t["subject_text"].lower(),
                         t["subject_type"],
