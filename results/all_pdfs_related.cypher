@@ -8,6 +8,12 @@ CREATE CONSTRAINT IF NOT EXISTS FOR (p:Population)   REQUIRE p.unique_key IS UNI
 CREATE CONSTRAINT IF NOT EXISTS FOR (c:Coreference)  REQUIRE c.unique_key IS UNIQUE;
 CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document)     REQUIRE d.doc_key    IS UNIQUE;
 CREATE CONSTRAINT IF NOT EXISTS FOR (e:Excerpt)      REQUIRE e.excerpt_key IS UNIQUE;
+// New entity constraints
+CREATE CONSTRAINT IF NOT EXISTS FOR (pr:Person)        REQUIRE pr.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (g:Organization)   REQUIRE g.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (l:Location)       REQUIRE l.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (af:Affiliation)   REQUIRE af.unique_key IS UNIQUE;
+CREATE CONSTRAINT IF NOT EXISTS FOR (au:Author)        REQUIRE au.unique_key IS UNIQUE;
 
 /// ---- Full-text indexes (Neo4j 5 syntax) ----
 CREATE FULLTEXT INDEX intervention_text_fts IF NOT EXISTS
@@ -34,6 +40,27 @@ CREATE FULLTEXT INDEX document_title_fts IF NOT EXISTS
 FOR (d:Document) ON EACH [d.title]
 OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
 
+// New entity FTS indexes
+CREATE FULLTEXT INDEX person_text_fts IF NOT EXISTS
+FOR (pr:Person) ON EACH [pr.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX organization_text_fts IF NOT EXISTS
+FOR (g:Organization) ON EACH [g.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX location_text_fts IF NOT EXISTS
+FOR (l:Location) ON EACH [l.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX affiliation_text_fts IF NOT EXISTS
+FOR (af:Affiliation) ON EACH [af.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
+CREATE FULLTEXT INDEX author_text_fts IF NOT EXISTS
+FOR (au:Author) ON EACH [au.text]
+OPTIONS { indexConfig: { `fulltext.analyzer`: 'english', `fulltext.eventually_consistent`: true } };
+
 /// ---- Param for the CSV file name ----
 :param csvFile => 'all_pdfs_related.csv';
 
@@ -54,10 +81,17 @@ WITH
   trim(coalesce(row.textBlock,'')) AS textBlock,
   trim(coalesce(row.effect_size,'')) AS effect_size,
   trim(row.page) AS page,
-  toFloat(coalesce(row.avg_confidence,'0')) AS avg_confidence
+  toFloat(coalesce(row.avg_confidence,'0')) AS avg_confidence,
+  // New optional entity fields
+  trim(coalesce(row.per,''))          AS per_text,
+  trim(coalesce(row.org,''))          AS org_text,
+  trim(coalesce(row.loc,''))          AS loc_text,
+  trim(coalesce(row.affiliation,''))  AS affiliation_text,
+  trim(coalesce(row.author,''))       AS author_text
 
 WITH
   row, s_type, o_type, rel_lc, s_text, o_text, file, title, textBlock, effect_size, page, avg_confidence,
+  per_text, org_text, loc_text, affiliation_text, author_text,
   CASE
     WHEN page = '' THEN NULL
     ELSE toInteger(page)
@@ -65,7 +99,13 @@ WITH
   (s_type + '|' + toLower(s_text)) AS s_key,
   (o_type + '|' + toLower(o_text)) AS o_key,
   (file + '|' + title) AS doc_key,
-  (file + '|' + title + '|' + left(textBlock, 1024)) AS excerpt_key
+  (file + '|' + title + '|' + left(textBlock, 1024)) AS excerpt_key,
+  // New entity keys (only meaningful when text not empty)
+  CASE WHEN per_text <> ''         THEN 'person|'       + toLower(per_text)        ELSE NULL END AS per_key,
+  CASE WHEN org_text <> ''         THEN 'organization|' + toLower(org_text)        ELSE NULL END AS org_key,
+  CASE WHEN loc_text <> ''         THEN 'location|'     + toLower(loc_text)        ELSE NULL END AS loc_key,
+  CASE WHEN affiliation_text <> '' THEN 'affiliation|'  + toLower(affiliation_text) ELSE NULL END AS affiliation_key,
+  CASE WHEN author_text <> ''      THEN 'author|'       + toLower(author_text)     ELSE NULL END AS author_key
 
 // Document & Excerpt (provenance)
 MERGE (d:Document {doc_key: doc_key})
@@ -82,8 +122,64 @@ MERGE (x:Excerpt {excerpt_key: excerpt_key})
     x.text  = textBlock,
     x.page = page_int
 
-
 MERGE (d)-[:HAS_EXCERPT]->(x)
+
+// Link optional entities to the excerpt via MENTIONED_IN
+FOREACH (_ IN CASE WHEN per_text <> '' THEN [1] ELSE [] END |
+  MERGE (pr:Person {unique_key: per_key})
+    ON CREATE SET
+      pr.file = file,
+      pr.title = per_text,
+      pr.text = per_text,
+      pr.type = 'person',
+      pr.page = page_int
+  MERGE (pr)-[mpr:MENTIONED_IN]->(x)
+    ON CREATE SET mpr.file = file, mpr.title = title, mpr.page = page_int
+)
+FOREACH (_ IN CASE WHEN org_text <> '' THEN [1] ELSE [] END |
+  MERGE (g:Organization {unique_key: org_key})
+    ON CREATE SET
+      g.file = file,
+      g.title = org_text,
+      g.text = org_text,
+      g.type = 'organization',
+      g.page = page_int
+  MERGE (g)-[mg:MENTIONED_IN]->(x)
+    ON CREATE SET mg.file = file, mg.title = title, mg.page = page_int
+)
+FOREACH (_ IN CASE WHEN loc_text <> '' THEN [1] ELSE [] END |
+  MERGE (l:Location {unique_key: loc_key})
+    ON CREATE SET
+      l.file = file,
+      l.title = loc_text,
+      l.text = loc_text,
+      l.type = 'location',
+      l.page = page_int
+  MERGE (l)-[ml:MENTIONED_IN]->(x)
+    ON CREATE SET ml.file = file, ml.title = title, ml.page = page_int
+)
+FOREACH (_ IN CASE WHEN affiliation_text <> '' THEN [1] ELSE [] END |
+  MERGE (af:Affiliation {unique_key: affiliation_key})
+    ON CREATE SET
+      af.file = file,
+      af.title = affiliation_text,
+      af.text = affiliation_text,
+      af.type = 'affiliation',
+      af.page = page_int
+  MERGE (af)-[maf:MENTIONED_IN]->(x)
+    ON CREATE SET maf.file = file, maf.title = title, maf.page = page_int
+)
+FOREACH (_ IN CASE WHEN author_text <> '' THEN [1] ELSE [] END |
+  MERGE (au:Author {unique_key: author_key})
+    ON CREATE SET
+      au.file = file,
+      au.title = author_text,
+      au.text = author_text,
+      au.type = 'author',
+      au.page = page_int
+  MERGE (au)-[mau:MENTIONED_IN]->(x)
+    ON CREATE SET mau.file = file, mau.title = title, mau.page = page_int
+)
 
 // Subject Node (direct type creation)
 FOREACH (_ IN CASE WHEN s_type = 'intervention' THEN [1] ELSE [] END |

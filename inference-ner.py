@@ -1,72 +1,123 @@
 import argparse
 import json
+import logging
 import pandas as pd
+import torch
+from tqdm import tqdm
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
 
 class NERInference:
-    def __init__(self, model_path):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForTokenClassification.from_pretrained(model_path)
-        self.ner_pipeline = pipeline("ner", model=self.model, tokenizer=self.tokenizer, aggregation_strategy="simple")
+    def __init__(self, args):
+        self.args = args
+        self.logger = logging.getLogger(__name__)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.args.model_path)
+        self.model = AutoModelForTokenClassification.from_pretrained(self.args.model_path)
+        
+        # Set device
+        device = 0 if torch.cuda.is_available() else -1
+        
+        self.ner_pipeline = pipeline(
+            "ner", 
+            model=self.model, 
+            tokenizer=self.tokenizer, 
+            aggregation_strategy="simple",
+            device=device,
+            batch_size=self.args.batch_size
+        )
 
-    def load_data(self, input_file, text_column):
-        if input_file.endswith('.csv'):
-            df = pd.read_csv(input_file)
-        elif input_file.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(input_file)
+    def load_data(self):
+        if self.args.input_file.endswith('.csv'):
+            df = pd.read_csv(self.args.input_file)
+        elif self.args.input_file.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(self.args.input_file)
         else:
             raise ValueError("Unsupported input file format. Please use CSV or Excel.")
 
-        if text_column not in df.columns:
-            raise ValueError(f"Text column '{text_column}' not found in the input file.")
+        if self.args.text_column not in df.columns:
+            raise ValueError(f"Text column '{self.args.text_column}' not found in the input file.")
         
+        self.logger.info(f"Loaded data from {self.args.input_file} with {len(df)} rows")
         return df
 
     def extract_entities(self, texts):
-        return self.ner_pipeline(texts)
+        self.logger.info(f"Processing {len(texts)} texts with batch size {self.args.batch_size}")
+        
+        # Use the pipeline directly with all texts - it will handle batching internally
+        results = []
+        for result in tqdm(self.ner_pipeline(texts), total=len(texts), desc="Processing texts"):
+            results.append(result)
+        
+        return results
 
-    def save_results(self, df, results, output_file, min_score):
+    def save_results(self, df, results):
         filtered_entities_list = []
         for entities in results:
             current_entities = []
             for entity in entities:
-                if entity['score'] >= min_score:
-                    # Convert numpy.float32 to float for JSON serialization
-                    entity['score'] = float(entity['score'])
-                    current_entities.append(entity)
+                if entity['score'] >= self.args.min_score:
+                    # Filter by entity type if entities_to_keep is specified
+                    if self.args.entities_to_keep is None or entity['entity_group'] in self.args.entities_to_keep:
+                        # Convert numpy.float32 to float for JSON serialization
+                        entity['score'] = float(entity['score'])
+                        current_entities.append(entity)
             filtered_entities_list.append(current_entities)
-        
-        df['entities'] = filtered_entities_list
-        
-        if output_file.endswith('.csv'):
-            df['entities'] = df['entities'].apply(json.dumps)
-            df.to_csv(output_file, index=False)
-        elif output_file.endswith('.json'):
-            df.to_json(output_file, orient='records', lines=True, indent=4)
+
+        # Check if entities column already exists and merge if it does
+        if self.args.entities_column in df.columns:
+            for i, new_entities in enumerate(filtered_entities_list):
+                existing_entities = df.iloc[i][self.args.entities_column]
+                if isinstance(existing_entities, str):
+                    try:
+                        existing_entities = json.loads(existing_entities)
+                    except:
+                        existing_entities = []
+                elif not isinstance(existing_entities, list):
+                    existing_entities = []
+
+                # Merge existing entities (unfiltered) with new filtered entities
+                filtered_entities_list[i] = existing_entities + new_entities
+
+        df[self.args.entities_column] = filtered_entities_list
+
+        if self.args.output_file.endswith('.csv'):
+            df[self.args.entities_column] = df[self.args.entities_column].apply(json.dumps)
+            df.to_csv(self.args.output_file, index=False)
+        elif self.args.output_file.endswith('.json'):
+            df.to_json(self.args.output_file, orient='records', lines=True, indent=4)
         else:
-            print("Unsupported output file format. Saving as CSV.")
+            self.logger.warning("Unsupported output file format. Saving as CSV.")
             df['entities'] = df['entities'].apply(json.dumps)
-            df.to_csv(output_file, index=False)
+            df.to_csv(self.args.output_file, index=False)
 
-        print(f"Inference complete. Results saved to {output_file}")
+        self.logger.info(f"Inference complete. Results saved to {self.args.output_file}")
 
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract entities from a text file using a fine-tuned NER model.")
     parser.add_argument("input_file", help="Path to the input file (CSV or Excel).")
     parser.add_argument("output_file", help="Path to save the output file with entities (CSV or JSON).")
     parser.add_argument("--model_path", default="mdeberta-v3-econ-ie-ner-tuned", help="Path to the fine-tuned model directory.")
     parser.add_argument("--text_column", default="text", help="Name of the column containing the text to process.")
+    parser.add_argument("--entities_column", default="entities", help="Name of the column to store extracted entities.")
+    parser.add_argument("--entities_to_keep", nargs='+', default=None, help="List of entity types to keep. If not specified, all entities are kept.")
     parser.add_argument("--min_score", type=float, default=0.8, help="Minimum score for an entity to be included.")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size for processing texts.")
+    parser.add_argument("--log_level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Set the logging level.")
     args = parser.parse_args()
 
-    try:
-        inference_engine = NERInference(args.model_path)
-        df = inference_engine.load_data(args.input_file, args.text_column)
-        texts = df[args.text_column].tolist()
-        results = inference_engine.extract_entities(texts)
-        inference_engine.save_results(df, results, args.output_file, args.min_score)
-    except (ValueError, FileNotFoundError) as e:
-        print(f"Error: {e}")
+    # Setup logging
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
 
-if __name__ == "__main__":
-    main()
+    try:
+        logger.info("Starting NER inference")
+        inference_engine = NERInference(args)
+        df = inference_engine.load_data()
+        texts = df[args.text_column].tolist()
+        logger.info(f"Processing {len(texts)} texts")
+        results = inference_engine.extract_entities(texts)
+        inference_engine.save_results(df, results)
+    except (ValueError, FileNotFoundError) as e:
+        logger.error(f"Error: {e}")
