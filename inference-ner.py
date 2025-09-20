@@ -59,7 +59,20 @@ class NERInference:
                     if self.args.entities_to_keep is None or entity['entity_group'] in self.args.entities_to_keep:
                         # Convert numpy.float32 to float for JSON serialization
                         entity['score'] = float(entity['score'])
-                        current_entities.append(entity)
+
+                        # Split entities that contain semicolons
+                        if ';' in entity['word']:
+                            sub_words = [word.strip() for word in entity['word'].split(';') if word.strip()]
+                            for sub_word in sub_words:
+                                new_entity = {
+                                    'entity_group': entity['entity_group'],
+                                    'score': entity['score'],
+                                    'word': sub_word
+                                }
+                                current_entities.append(new_entity)
+                        else:
+                            current_entities.append(entity)
+
             filtered_entities_list.append(current_entities)
 
         # Check if entities column already exists and merge if it does

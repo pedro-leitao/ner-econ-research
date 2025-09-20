@@ -100,12 +100,13 @@ WITH
   (o_type + '|' + toLower(o_text)) AS o_key,
   (file + '|' + title) AS doc_key,
   (file + '|' + title + '|' + left(textBlock, 1024)) AS excerpt_key,
-  // New entity keys (only meaningful when text not empty)
-  CASE WHEN per_text <> ''         THEN 'person|'       + toLower(per_text)        ELSE NULL END AS per_key,
-  CASE WHEN org_text <> ''         THEN 'organization|' + toLower(org_text)        ELSE NULL END AS org_key,
-  CASE WHEN loc_text <> ''         THEN 'location|'     + toLower(loc_text)        ELSE NULL END AS loc_key,
+  // New entity lists (split on ';' and trim; ignore empty parts)
+  CASE WHEN per_text = '' THEN [] ELSE [t IN split(per_text, ';') WHERE trim(t) <> '' | trim(t)] END AS per_list,
+  CASE WHEN org_text = '' THEN [] ELSE [t IN split(org_text, ';') WHERE trim(t) <> '' | trim(t)] END AS org_list,
+  CASE WHEN loc_text = '' THEN [] ELSE [t IN split(loc_text, ';') WHERE trim(t) <> '' | trim(t)] END AS loc_list,
+  // Keep single-value keys for others
   CASE WHEN affiliation_text <> '' THEN 'affiliation|'  + toLower(affiliation_text) ELSE NULL END AS affiliation_key,
-  CASE WHEN author_text <> ''      THEN 'author|'       + toLower(author_text)     ELSE NULL END AS author_key
+  CASE WHEN author_text      <> '' THEN 'author|'       + toLower(author_text)      ELSE NULL END AS author_key
 
 // Document & Excerpt (provenance)
 MERGE (d:Document {doc_key: doc_key})
@@ -125,39 +126,40 @@ MERGE (x:Excerpt {excerpt_key: excerpt_key})
 MERGE (d)-[:HAS_EXCERPT]->(x)
 
 // Link optional entities to the excerpt via MENTIONED_IN
-FOREACH (_ IN CASE WHEN per_text <> '' THEN [1] ELSE [] END |
-  MERGE (pr:Person {unique_key: per_key})
+FOREACH (per IN per_list |
+  MERGE (pr:Person {unique_key: 'person|' + toLower(per)})
     ON CREATE SET
       pr.file = file,
-      pr.title = per_text,
-      pr.text = per_text,
+      pr.title = per,
+      pr.text = per,
       pr.type = 'person',
       pr.page = page_int
   MERGE (pr)-[mpr:MENTIONED_IN]->(x)
     ON CREATE SET mpr.file = file, mpr.title = title, mpr.page = page_int
 )
-FOREACH (_ IN CASE WHEN org_text <> '' THEN [1] ELSE [] END |
-  MERGE (g:Organization {unique_key: org_key})
+FOREACH (org IN org_list |
+  MERGE (g:Organization {unique_key: 'organization|' + toLower(org)})
     ON CREATE SET
       g.file = file,
-      g.title = org_text,
-      g.text = org_text,
+      g.title = org,
+      g.text = org,
       g.type = 'organization',
       g.page = page_int
   MERGE (g)-[mg:MENTIONED_IN]->(x)
     ON CREATE SET mg.file = file, mg.title = title, mg.page = page_int
 )
-FOREACH (_ IN CASE WHEN loc_text <> '' THEN [1] ELSE [] END |
-  MERGE (l:Location {unique_key: loc_key})
+FOREACH (loc IN loc_list |
+  MERGE (l:Location {unique_key: 'location|' + toLower(loc)})
     ON CREATE SET
       l.file = file,
-      l.title = loc_text,
-      l.text = loc_text,
+      l.title = loc,
+      l.text = loc,
       l.type = 'location',
       l.page = page_int
   MERGE (l)-[ml:MENTIONED_IN]->(x)
     ON CREATE SET ml.file = file, ml.title = title, ml.page = page_int
 )
+// Affiliation and Author unchanged
 FOREACH (_ IN CASE WHEN affiliation_text <> '' THEN [1] ELSE [] END |
   MERGE (af:Affiliation {unique_key: affiliation_key})
     ON CREATE SET

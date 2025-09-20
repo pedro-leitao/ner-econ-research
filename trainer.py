@@ -3,6 +3,7 @@ import conllu
 from dataclasses import dataclass
 from typing import List, Dict
 import numpy as np
+import logging
 from datasets import Dataset, DatasetDict
 from transformers import (AutoTokenizer, AutoModelForTokenClassification,
                           DataCollatorForTokenClassification, TrainingArguments,
@@ -20,6 +21,19 @@ class NERTrainer:
         self.tokenized_datasets = None
         self.model = None
         self.trainer = None
+        
+        # Set up logger
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        
+        # Create console handler with formatting
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+        
         set_seed(self.args.seed)
 
     def load_data(self):
@@ -153,11 +167,11 @@ class NERTrainer:
         self.tokenizer.save_pretrained(training_args.output_dir)
 
     def evaluate(self):
-        print(self.trainer.evaluate(self.tokenized_datasets["test"]).get("eval_report", ""))
+        self.logger.info(self.trainer.evaluate(self.tokenized_datasets["test"]).get("eval_report", ""))
 
     def run_inference(self):
         ner = pipeline("ner", model=self.args.output_dir, tokenizer=self.args.output_dir, aggregation_strategy="simple")
-        print(ner(self.args.run_example))
+        self.logger.info(ner(self.args.run_example))
 
     def run(self):
         ds = self.load_data()

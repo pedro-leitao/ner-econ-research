@@ -173,34 +173,31 @@ class PDFParser:
                             text = blk[4]
                             if not text:
                                 continue
-                            text = text.replace("\n", " ").strip()
-                            text = self._normalize_ws(text)
-                            if not text:
-                                continue
-                            if self.is_heading(text):
-                                continue
+                            # Don't replace newlines here, but join blocks with spaces later.
+                            # Sentences can be broken by newlines that pymupdf preserves.
+                            # Let's join blocks and then normalize whitespace.
                             candidate_texts.append(text)
 
-                        # Process with spaCy in batches for efficiency
-                        # (We’ll chunk per text after getting sents)
-                        chunk_ix = 0
-                        for text in candidate_texts:
-                            chunks = self._chunk_sentences(text)
-                            for ch in chunks:
-                                writer.writerow(
-                                    {
-                                        "file": filename,
-                                        "page": page_num + 1,
-                                        "chunk_ix": chunk_ix,
-                                        "title": metadata.get("title", ""),
-                                        "author": metadata.get("author", ""),
-                                        "modDate": metadata.get("modDate", ""),
-                                        "creationDate": metadata.get("creationDate", ""),
-                                        "subject": metadata.get("subject", ""),
-                                        "textBlock": ch,
-                                    }
-                                )
-                                chunk_ix += 1
+                        # Join all candidate texts from the page into one string
+                        full_page_text = " ".join(candidate_texts)
+
+                        # Process the full page text with spaCy to get sentence chunks
+                        chunks = self._chunk_sentences(full_page_text)
+
+                        for chunk_ix, ch in enumerate(chunks):
+                            writer.writerow(
+                                {
+                                    "file": filename,
+                                    "page": page_num + 1,
+                                    "chunk_ix": chunk_ix,
+                                    "title": metadata.get("title", ""),
+                                    "author": metadata.get("author", ""),
+                                    "modDate": metadata.get("modDate", ""),
+                                    "creationDate": metadata.get("creationDate", ""),
+                                    "subject": metadata.get("subject", ""),
+                                    "textBlock": ch,
+                                }
+                            )
 
                     doc.close()
                 except Exception as e:
