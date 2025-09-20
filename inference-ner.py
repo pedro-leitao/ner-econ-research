@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+from collections import Counter
 
 class NERInference:
     def __init__(self, args):
@@ -51,6 +52,7 @@ class NERInference:
 
     def save_results(self, df, results):
         filtered_entities_list = []
+        entity_group_counts = Counter()
         for entities in results:
             current_entities = []
             for entity in entities:
@@ -70,8 +72,10 @@ class NERInference:
                                     'word': sub_word
                                 }
                                 current_entities.append(new_entity)
+                                entity_group_counts[new_entity['entity_group']] += 1
                         else:
                             current_entities.append(entity)
+                            entity_group_counts[entity['entity_group']] += 1
 
             filtered_entities_list.append(current_entities)
 
@@ -101,6 +105,15 @@ class NERInference:
             self.logger.warning("Unsupported output file format. Saving as CSV.")
             df['entities'] = df['entities'].apply(json.dumps)
             df.to_csv(self.args.output_file, index=False)
+
+        # Log entity group counts for this run
+        if entity_group_counts:
+            self.logger.info("Entity group counts (this run):")
+            for group, count in entity_group_counts.most_common():
+                self.logger.info(f"{group}: {count}")
+            self.logger.info(f"Total entities extracted (this run): {sum(entity_group_counts.values())}")
+        else:
+            self.logger.info("No entities extracted (this run).")
 
         self.logger.info(f"Inference complete. Results saved to {self.args.output_file}")
 
